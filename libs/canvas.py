@@ -22,7 +22,8 @@ CURSOR_GRAB = Qt.OpenHandCursor
 
 
 class Canvas(QWidget):
-    zoomRequest = pyqtSignal(int)
+    zoomRequest = pyqtSignal(int, int, int, int, int)
+    zoomResetRequest = pyqtSignal()
     scrollRequest = pyqtSignal(int, int)
     newShape = pyqtSignal()
     selectionChanged = pyqtSignal(bool)
@@ -31,7 +32,8 @@ class Canvas(QWidget):
 
     CREATE, EDIT = list(range(2))
 
-    epsilon = 11.0
+    # epsilon = 11.0
+    epsilon = 6.0
 
     def __init__(self, *args, **kwargs):
         super(Canvas, self).__init__(*args, **kwargs)
@@ -67,6 +69,15 @@ class Canvas(QWidget):
         # initialisation for panning
         self.pan_initial_pos = QPoint()
 
+        self.moving_vertex = False
+        self.moving_box = False
+        self.panning = False
+        self.shape_before_edit = None
+        self.last_pos = None
+
+        self.undo_stack = []
+        self.undo_pointer = len(self.undo_stack)
+
     def set_drawing_color(self, qcolor):
         self.drawing_line_color = qcolor
         self.drawing_rect_color = qcolor
@@ -91,10 +102,14 @@ class Canvas(QWidget):
 
     def set_editing(self, value=True):
         self.mode = self.EDIT if value else self.CREATE
-        if not value:  # Create
-            self.un_highlight()
-            self.de_select_shape()
         self.prev_point = QPointF()
+
+        if not value:  # Create
+            self.override_cursor(CURSOR_DRAW)
+            self.un_highlight()
+            self.discard_moving()
+            self.prev_point = self.last_pos
+
         self.repaint()
 
     def un_highlight(self):
@@ -108,6 +123,8 @@ class Canvas(QWidget):
     def mouseMoveEvent(self, ev):
         """Update line with last point and current coordinates."""
         pos = self.transform_pos(ev.pos())
+        self.last_pos = pos
+
 
         # Update coordinates in status bar if image is opened
         window = self.parent().window()
@@ -173,23 +190,39 @@ class Canvas(QWidget):
             return
 
         # Polygon/Vertex moving.
-        if Qt.LeftButton & ev.buttons():
-            if self.selected_vertex():
-                self.bounded_move_vertex(pos)
-                self.shapeMoved.emit()
-                self.repaint()
-            elif self.selected_shape and self.prev_point:
-                self.override_cursor(CURSOR_MOVE)
-                self.bounded_move_shape(self.selected_shape, pos)
-                self.shapeMoved.emit()
-                self.repaint()
-            else:
-                # pan
-                delta_x = pos.x() - self.pan_initial_pos.x()
-                delta_y = pos.y() - self.pan_initial_pos.y()
-                self.scrollRequest.emit(delta_x, Qt.Horizontal)
-                self.scrollRequest.emit(delta_y, Qt.Vertical)
-                self.update()
+        if self.moving_vertex:
+            self.bounded_move_vertex(pos)
+            self.shapeMoved.emit()
+            self.repaint()
+            return
+
+        if self.moving_box:
+            self.override_cursor(CURSOR_MOVE)
+            self.bounded_move_shape(self.selected_shape, pos)
+            self.shapeMoved.emit()
+            self.repaint()
+            return
+
+        # Polygon/Vertex moving.
+        if Qt.LeftButton & ev.buttons() & self.panning:
+            # if self.selected_vertex():
+            #     self.bounded_move_vertex(pos)
+            #     self.shapeMoved.emit()
+            #     self.repaint()
+            # elif self.selected_shape and self.prev_point:
+            # if self.selected_shape and self.prev_point:
+            #     self.override_cursor(CURSOR_MOVE)
+            #     self.bounded_move_shape(self.selected_shape, pos)
+            #     self.shapeMoved.emit()
+            #     self.repaint()
+            # else:
+            # pan
+            delta_x = pos.x() - self.pan_initial_pos.x()
+            delta_y = pos.y() - self.pan_initial_pos.y()
+
+            self.scrollRequest.emit(delta_x * 50, Qt.Horizontal)
+            self.scrollRequest.emit(delta_y * 50, Qt.Vertical)
+            self.update()
             return
 
         # Just hovering over the canvas, 2 possibilities:
@@ -229,46 +262,73 @@ class Canvas(QWidget):
             self.override_cursor(CURSOR_DEFAULT)
 
     def mousePressEvent(self, ev):
+        import copy
         pos = self.transform_pos(ev.pos())
 
         if ev.button() == Qt.LeftButton:
             if self.drawing():
                 self.handle_drawing(pos)
+            elif self.moving_vertex:
+                self.moving_vertex = False
+                self.shape_before_edit = None
+            elif self.moving_box:
+                self.moving_box = False
+                self.shape_before_edit = None
             else:
                 selection = self.select_shape_point(pos)
                 self.prev_point = pos
+                if self.selected_vertex():
+                    self.moving_vertex = True
+                    self.override_cursor(CURSOR_POINT)
+                    self.shape_before_edit = copy.deepcopy(self.selected_shape)
+                elif self.selected_shape:
+                    self.moving_box = True
+                    self.override_cursor(CURSOR_GRAB)
+                    self.shape_before_edit = copy.deepcopy(self.selected_shape)
 
-                if selection is None:
+                else:
                     # pan
                     QApplication.setOverrideCursor(QCursor(Qt.OpenHandCursor))
                     self.pan_initial_pos = pos
+                    self.panning = True
 
-        elif ev.button() == Qt.RightButton and self.editing():
+        if ev.button() == Qt.RightButton and self.editing():
             self.select_shape_point(pos)
             self.prev_point = pos
+        elif ev.button() == Qt.MidButton:
+            self.zoomResetRequest.emit()
+
         self.update()
 
     def mouseReleaseEvent(self, ev):
         if ev.button() == Qt.RightButton:
             menu = self.menus[bool(self.selected_shape_copy)]
+            print(self.menus)
+            print(menu)
             self.restore_cursor()
-            if not menu.exec_(self.mapToGlobal(ev.pos()))\
-               and self.selected_shape_copy:
-                # Cancel the move by deleting the shadow copy.
-                self.selected_shape_copy = None
-                self.repaint()
-        elif ev.button() == Qt.LeftButton and self.selected_shape:
-            if self.selected_vertex():
-                self.override_cursor(CURSOR_POINT)
-            else:
-                self.override_cursor(CURSOR_GRAB)
+            print(menu.exec_(self.mapToGlobal(ev.pos())))
+            # if not menu.exec_(self.mapToGlobal(ev.pos())) and self.selected_shape_copy:
+            #     # Cancel the move by deleting the shadow copy.
+            #     self.selected_shape_copy = None
+            #     self.repaint()
+        # elif ev.button() == Qt.LeftButton and self.selected_shape:
+        #     if self.selected_vertex():
+        #         self.override_cursor(CURSOR_POINT)
+        #     else:
+        #         self.override_cursor(CURSOR_GRAB)
+
         elif ev.button() == Qt.LeftButton:
-            pos = self.transform_pos(ev.pos())
-            if self.drawing():
-                self.handle_drawing(pos)
-            else:
-                # pan
-                QApplication.restoreOverrideCursor()
+            self.panning = False
+
+        # elif ev.button() == Qt.LeftButton:
+        #     QApplication.restoreOverrideCursor()
+        #     self.panning = False
+        #     pos = self.transform_pos(ev.pos())
+        #     if self.drawing():
+        #         self.handle_drawing(pos)
+        #     else:
+        #         # pan
+        #         QApplication.restoreOverrideCursor()
 
     def end_move(self, copy=False):
         assert self.selected_shape and self.selected_shape_copy
@@ -321,6 +381,8 @@ class Canvas(QWidget):
     def mouseDoubleClickEvent(self, ev):
         # We need at least 4 points here, since the mousePress handler
         # adds an extra one before this handler is called.
+        self.delete_selected()
+        self.discard_moving()
         if self.can_close_shape() and len(self.current) > 3:
             self.current.pop_point()
             self.finalise()
@@ -442,6 +504,8 @@ class Canvas(QWidget):
             self.shapes.remove(self.selected_shape)
             self.selected_shape = None
             self.update()
+            self.moving_box = False
+            self.moving_box = False
             return shape
 
     def copy_selected_shape(self):
@@ -580,9 +644,12 @@ class Canvas(QWidget):
             h_delta = delta.x()
             v_delta = delta.y()
 
-        mods = ev.modifiers()
-        if Qt.ControlModifier == int(mods) and v_delta:
-            self.zoomRequest.emit(v_delta)
+        pos = self.transform_pos(ev.pos())
+
+        # mods = ev.modifiers()
+        # if Qt.ControlModifier == int(mods) and v_delta:
+        if v_delta:
+            self.zoomRequest.emit(v_delta, pos.x(), pos.y(), ev.pos().x(), ev.pos().y())
         else:
             v_delta and self.scrollRequest.emit(v_delta, Qt.Vertical)
             h_delta and self.scrollRequest.emit(h_delta, Qt.Horizontal)
@@ -590,11 +657,13 @@ class Canvas(QWidget):
 
     def keyPressEvent(self, ev):
         key = ev.key()
-        if key == Qt.Key_Escape and self.current:
+        # if key == Qt.Key_Escape and self.current:
+        if key == Qt.Key_Escape:
             print('ESC press')
             self.current = None
             self.drawingPolygon.emit(False)
             self.update()
+            self.discard_moving()
         elif key == Qt.Key_Return and self.can_close_shape():
             self.finalise()
         elif key == Qt.Key_Left and self.selected_shape:
@@ -605,6 +674,14 @@ class Canvas(QWidget):
             self.move_one_pixel('Up')
         elif key == Qt.Key_Down and self.selected_shape:
             self.move_one_pixel('Down')
+
+    def discard_moving(self):
+        self.moving_box = False
+        self.moving_vertex = False
+        if self.shape_before_edit and self.selected_shape:
+            self.selected_shape.points = [p for p in self.shape_before_edit.points]
+        self.shape_before_edit = None
+        self.de_select_shape()
 
     def move_one_pixel(self, direction):
         # print(self.selectedShape.points)

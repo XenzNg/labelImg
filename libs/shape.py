@@ -30,7 +30,8 @@ class Shape(object):
     line_color = DEFAULT_LINE_COLOR
     fill_color = DEFAULT_FILL_COLOR
     select_line_color = DEFAULT_SELECT_LINE_COLOR
-    select_fill_color = DEFAULT_SELECT_FILL_COLOR
+    # select_fill_color = DEFAULT_SELECT_FILL_COLOR
+    select_fill_color = QColor(0, 128, 255, 50)
     vertex_fill_color = DEFAULT_VERTEX_FILL_COLOR
     h_vertex_fill_color = DEFAULT_HVERTEX_FILL_COLOR
     point_type = P_ROUND
@@ -86,7 +87,8 @@ class Shape(object):
 
     def paint(self, painter):
         if self.points:
-            color = self.select_line_color if self.selected else self.line_color
+            # color = self.select_line_color if self.selected else self.line_color
+            color = self.select_line_color if self.selected else QColor(0, 255, 0, 125)
             pen = QPen(color)
             # Try using integer sizes for smoother drawing(?)
             pen.setWidth(max(1, int(round(2.0 / self.scale))))
