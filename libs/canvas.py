@@ -1,3 +1,4 @@
+import libs.shape
 
 try:
     from PyQt5.QtGui import *
@@ -31,6 +32,8 @@ class Canvas(QWidget):
     selectionChanged = pyqtSignal(bool)
     shapeMoved = pyqtSignal()
     drawingPolygon = pyqtSignal(bool)
+    autoZoomRequest = pyqtSignal(libs.shape.Shape)
+    autoZoomResetRequest = pyqtSignal()
 
     CREATE, EDIT = list(range(2))
 
@@ -271,10 +274,12 @@ class Canvas(QWidget):
             if self.drawing():
                 self.handle_drawing(pos)
             elif self.moving_vertex:
+                self.autoZoomResetRequest.emit()
                 self.moving_vertex = False
                 self.shape_before_edit = None
                 self.de_select_shape()
             elif self.moving_box:
+                self.autoZoomResetRequest.emit()
                 self.moving_box = False
                 self.shape_before_edit = None
                 self.de_select_shape()
@@ -285,10 +290,12 @@ class Canvas(QWidget):
                     self.moving_vertex = True
                     self.override_cursor(CURSOR_POINT)
                     self.shape_before_edit = copy.deepcopy(self.selected_shape)
+                    self.autoZoomRequest.emit(self.shape_before_edit)
                 elif self.selected_shape:
                     self.moving_box = True
                     self.override_cursor(CURSOR_GRAB)
                     self.shape_before_edit = copy.deepcopy(self.selected_shape)
+                    self.autoZoomRequest.emit(self.shape_before_edit)
 
                 else:
                     # pan
@@ -524,6 +531,7 @@ class Canvas(QWidget):
             self.update()
             self.moving_box = False
             self.moving_box = False
+            self.autoZoomResetRequest.emit()
             return shape
 
     def copy_selected_shape(self):
@@ -700,6 +708,7 @@ class Canvas(QWidget):
             self.selected_shape.points = [p for p in self.shape_before_edit.points]
         self.shape_before_edit = None
         self.de_select_shape()
+        self.autoZoomResetRequest.emit()
 
     def move_one_pixel(self, direction):
         # print(self.selectedShape.points)

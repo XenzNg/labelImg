@@ -185,6 +185,10 @@ class MainWindow(QMainWindow, WindowMixin):
         self.canvas = Canvas(parent=self)
         self.canvas.zoomRequest.connect(self.zoom_request)
         self.canvas.zoomResetRequest.connect(self.set_fit_window)
+        self.canvas.autoZoomRequest.connect(self.auto_zoom)
+        self.canvas.autoZoomResetRequest.connect(self.auto_zoom_reset)
+        self.auto_zoom_original_state = [100, 0, 0]
+        self.auto_zoomed = False
         self.canvas.set_drawing_shape_to_square(settings.get(SETTING_DRAW_SQUARE, False))
 
         scroll = QScrollArea()
@@ -996,6 +1000,59 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def add_zoom(self, increment=10):
         self.set_zoom(self.zoom_widget.value() + increment)
+
+    def auto_zoom(self, rect):
+        x_coords = []
+        y_coords = []
+        for item in rect.points:
+            x_coords.append(item.x())
+            y_coords.append(item.y())
+        center_x = (max(x_coords) + min(x_coords)) / 2
+        center_y = (max(y_coords) + min(y_coords)) / 2
+        rect_width = max(x_coords) - min(x_coords)
+        rect_height = max(y_coords) - min(y_coords)
+
+        h_bar = self.scroll_bars[Qt.Horizontal]
+        v_bar = self.scroll_bars[Qt.Vertical]
+        self.auto_zoom_original_state = [self.zoom_widget.value(), h_bar.value(), v_bar.value()]
+
+        canvas_view_x = self.canvas.frameGeometry().width() - h_bar.maximum()
+        canvas_view_y = self.canvas.frameGeometry().height() - v_bar.maximum()
+
+        screen_ratio = 0.3
+        zoom_scale_x = canvas_view_x / rect_width * screen_ratio
+        zoom_scale_y = canvas_view_y / rect_height * screen_ratio
+
+        zoom_value = min(min(zoom_scale_x, zoom_scale_y) * 100, self.zoom_widget.maximum())
+
+        # proceed if zoom needed > threshold
+        zoom_factor_threshold = 1.5
+
+        if zoom_value / self.zoom_widget.value() < zoom_factor_threshold:
+            return
+
+        self.set_zoom(zoom_value)
+
+        canvas_view_x = self.canvas.frameGeometry().width() - h_bar.maximum()
+        canvas_view_y = self.canvas.frameGeometry().height() - v_bar.maximum()
+
+        center_x_scaled, center_y_scaled = center_x * zoom_value / 100, center_y * zoom_value / 100
+        canvas_view_center_x, canvas_view_center_y = canvas_view_x / 2, canvas_view_y / 2
+
+        # Move rect center to view port center
+        h_bar.setValue(center_x_scaled - canvas_view_center_x)
+        v_bar.setValue(center_y_scaled - canvas_view_center_y)
+
+        self.auto_zoomed = True
+
+    def auto_zoom_reset(self):
+        if not self.auto_zoomed:
+            return
+        original_zoom, original_h_scroll, original_v_scroll = self.auto_zoom_original_state
+        self.set_zoom(original_zoom)
+        self.scroll_bars[Qt.Horizontal].setValue(original_h_scroll)
+        self.scroll_bars[Qt.Vertical].setValue(original_v_scroll)
+        self.auto_zoomed = False
 
     def zoom_request(self, delta, painter_x, painter_y, canvas_cursor_x, canvas_cursor_y):
         # get the current scrollbar positions
