@@ -1416,7 +1416,10 @@ class MainWindow(QMainWindow, WindowMixin):
         else:
             index_folder = os.path.dirname(self.last_open_dir)
             current_folder_index = os.path.basename(index_folder)
-            prev_index = int(current_folder_index) - 1
+            try:
+                prev_index = int(current_folder_index) - 1
+            except ValueError:
+                return
             prev_folder = os.path.join(os.path.dirname(index_folder), str(prev_index), 'JPEGImages')
             if os.path.exists(prev_folder):
                 self.import_dir_images(prev_folder, prev=True)
@@ -1451,7 +1454,10 @@ class MainWindow(QMainWindow, WindowMixin):
             else:
                 index_folder = os.path.dirname(self.last_open_dir)
                 current_folder_index = os.path.basename(index_folder)
-                next_index = int(current_folder_index) + 1
+                try:
+                    next_index = int(current_folder_index) + 1
+                except ValueError:
+                    return
                 next_folder = os.path.join(os.path.dirname(index_folder), str(next_index), 'JPEGImages')
                 if os.path.exists(next_folder):
                     self.import_dir_images(next_folder)
