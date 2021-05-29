@@ -11,6 +11,7 @@ except ImportError:
 
 from libs.shape import Shape
 from libs.utils import distance
+import copy
 
 CURSOR_DEFAULT = Qt.ArrowCursor
 CURSOR_POINT = Qt.PointingHandCursor
@@ -76,7 +77,7 @@ class Canvas(QWidget):
         self.last_pos = None
 
         self.undo_stack = []
-        self.undo_pointer = len(self.undo_stack)
+        self.undo_pointer = 0
 
     def set_drawing_color(self, qcolor):
         self.drawing_line_color = qcolor
@@ -124,8 +125,16 @@ class Canvas(QWidget):
         """Update line with last point and current coordinates."""
         pos = self.transform_pos(ev.pos())
         self.last_pos = pos
-
-
+        print('mou')
+        print(self.shapes)
+        if self.undo_stack:
+            print(self.undo_stack[-1])
+            print(self.undo_stack[-1] != self.shapes)
+        if (not self.undo_stack) or (self.undo_stack[-1] != self.shapes):
+            self.undo_stack.append(copy.deepcopy(self.shapes))
+            self.undo_pointer = len(self.undo_stack) - 1
+            print('copied')
+            print(self.undo_pointer)
         # Update coordinates in status bar if image is opened
         window = self.parent().window()
         if window.file_path is not None:
@@ -262,7 +271,6 @@ class Canvas(QWidget):
             self.override_cursor(CURSOR_DEFAULT)
 
     def mousePressEvent(self, ev):
-        import copy
         pos = self.transform_pos(ev.pos())
 
         if ev.button() == Qt.LeftButton:
