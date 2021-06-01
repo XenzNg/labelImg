@@ -240,21 +240,6 @@ class MainWindow(QMainWindow, WindowMixin):
         save = action(get_str('save'), self.save_file,
                       'Ctrl+S', 'save', get_str('saveDetail'), enabled=False)
 
-        self.dir_report = file_counter_config.report_dir
-        if not os.path.exists(self.dir_report):
-            print('Invalid report directory: {}'.format(self.dir_report))
-            sys.exit(-1)
-        self.dir_annotation = os.path.join(self.dir_report, 'Annotations')
-        if not os.path.exists(self.dir_annotation):
-            os.makedirs(self.dir_annotation)
-        self.dir_verified = os.path.join(self.dir_report, 'JPEGImages')
-        self.dir_abnormal = os.path.join(self.dir_report, 'AbnormalImages')
-        self.dir_confused = os.path.join(self.dir_report, 'ConfusedImages')
-        self.image_categories = [self.dir_verified, self.dir_abnormal, self.dir_confused]
-        for _dir in self.image_categories:
-            if not os.path.exists(_dir):
-                os.makedirs(_dir)
-
 
         def get_format_meta(format):
             """
@@ -530,6 +515,25 @@ class MainWindow(QMainWindow, WindowMixin):
         # Open Dir if default file
         if self.file_path and os.path.isdir(self.file_path):
             self.open_dir_dialog(dir_path=self.file_path, silent=True)
+
+        self.dir_report = file_counter_config.report_dir
+        if not os.path.exists(self.dir_report):
+            print('Invalid report directory: {}'.format(self.dir_report))
+            sys.exit(-1)
+        self.dir_annotation = os.path.join(self.dir_report, 'Annotations')
+        if not os.path.exists(self.dir_annotation):
+            os.makedirs(self.dir_annotation)
+        self.dir_verified = os.path.join(self.dir_report, 'JPEGImages')
+        self.dir_abnormal = os.path.join(self.dir_report, 'AbnormalImages')
+        self.dir_confused = os.path.join(self.dir_report, 'ConfusedImages')
+        self.image_categories = [self.dir_verified, self.dir_abnormal, self.dir_confused]
+        for _dir in self.image_categories:
+            if not os.path.exists(_dir):
+                os.makedirs(_dir)
+
+        self.import_dir_images(dir_path=file_counter_config.jpeg_dir)
+        self.zoom_mode = self.FIT_WINDOW
+        self.adjust_scale()
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Control:
@@ -986,13 +990,13 @@ class MainWindow(QMainWindow, WindowMixin):
     def scroll_request(self, delta, orientation):
         units = - delta / (8 * 15)
         bar = self.scroll_bars[orientation]
-        bar.setValue(bar.value() + bar.singleStep() * units)
+        bar.setValue(int(bar.value() + bar.singleStep() * units))
 
     def set_zoom(self, value):
         self.actions.fitWidth.setChecked(False)
         self.actions.fitWindow.setChecked(False)
         self.zoom_mode = self.MANUAL_ZOOM
-        self.zoom_widget.setValue(value)
+        self.zoom_widget.setValue(int(value))
 
     def add_zoom(self, increment=10):
         self.set_zoom(self.zoom_widget.value() + increment)
@@ -1036,11 +1040,13 @@ class MainWindow(QMainWindow, WindowMixin):
         v_bar_value = v_bar.value()
         # zoom in
         units = delta / (8 * 15)
-        zoom_factor = 2
-        if units > 0:
-            self.add_zoom(self.zoom_widget.value() * (zoom_factor - 1) * units)
-        elif units < 0:
-            self.add_zoom(self.zoom_widget.value() * (1 - 1/zoom_factor) * units)
+        # zoom_factor = 2
+        # if units > 0:
+        #     self.add_zoom(self.zoom_widget.value() * (zoom_factor - 1) * units)
+        # elif units < 0:
+        #     self.add_zoom(self.zoom_widget.value() * (1 - 1/zoom_factor) * units)
+
+        self.add_zoom(units*200)
 
         # get the difference in scrollbar values
         # this is how far we can move
@@ -1051,8 +1057,8 @@ class MainWindow(QMainWindow, WindowMixin):
         scaled_x = scale * painter_x
         scaled_y = scale * painter_y
 
-        h_bar.setValue(h_bar_value + scaled_x - canvas_cursor_x)
-        v_bar.setValue(v_bar_value + scaled_y - canvas_cursor_y)
+        h_bar.setValue(int(h_bar_value + scaled_x - canvas_cursor_x))
+        v_bar.setValue(int(v_bar_value + scaled_y - canvas_cursor_y))
 
         # new_h_bar_value = h_bar.value() + move_x * d_h_bar_max
         # new_v_bar_value = v_bar.value() + move_y * d_v_bar_max
