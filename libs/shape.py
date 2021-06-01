@@ -85,7 +85,7 @@ class Shape(object):
     def set_open(self):
         self._closed = False
 
-    def paint(self, painter, shapes):
+    def paint(self, painter, shapes=None):
         if self.points:
             # color = self.select_line_color if self.selected else self.line_color
             color = self.select_line_color if self.selected else QColor(0, 255, 0, 125)
@@ -131,13 +131,14 @@ class Shape(object):
                         self.label = ""
                     if min_y < min_y_label:
                         min_y += min_y_label
-                    shapes_hand = [item for item in shapes if item.label == 'hand']
-                    if self in shapes_hand:
-                        current_shape_index = shapes_hand.index(self)
-                        txt = '{} ({}/{})'.format(self.label, current_shape_index + 1, len(shapes_hand))
+                    if shapes:
+                        shapes_hand = [item for item in shapes if item.label == 'hand']
+                        if self in shapes_hand:
+                            current_shape_index = shapes_hand.index(self)
+                            txt = '{} ({}/{})'.format(self.label, current_shape_index + 1, len(shapes_hand))
+                            painter.drawText(min_x, min_y, txt)
                     else:
-                        txt = self.label
-                    painter.drawText(min_x, min_y, txt)
+                        painter.drawText(min_x, min_y, self.label)
 
             if self.fill:
                 color = self.select_fill_color if self.selected else self.fill_color
