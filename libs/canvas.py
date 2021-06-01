@@ -24,6 +24,7 @@ CURSOR_GRAB = Qt.OpenHandCursor
 
 
 class Canvas(QWidget):
+    dirtySignal = pyqtSignal()
     zoomRequest = pyqtSignal(int, int, int, int, int)
     zoomResetRequest = pyqtSignal()
     scrollRequest = pyqtSignal(int, int)
@@ -77,8 +78,10 @@ class Canvas(QWidget):
         self.shape_before_edit = None
         self.last_pos = None
 
-        self.db_clicked = False
+        self.db_rclicked = False
         self.db_rclick_delay = 0.1
+
+        self.last_selected_shape = None
 
     def set_drawing_color(self, qcolor):
         self.drawing_line_color = qcolor
@@ -206,7 +209,8 @@ class Canvas(QWidget):
             return
 
         # Polygon/Vertex moving.
-        if Qt.LeftButton & ev.buttons() & self.panning:
+        # if Qt.LeftButton & ev.buttons() & self.panning:
+        if self.panning and ev.buttons() in (Qt.MiddleButton, Qt.LeftButton):
             # if self.selected_vertex():
             #     self.bounded_move_vertex(pos)
             #     self.shapeMoved.emit()
@@ -304,20 +308,21 @@ class Canvas(QWidget):
             threading.Thread(target=self.rclick_handle, daemon=True).start()
 
         elif ev.button() == Qt.MidButton:
-            self.zoomResetRequest.emit()
+            QApplication.setOverrideCursor(QCursor(Qt.OpenHandCursor))
+            self.pan_initial_pos = pos
+            self.panning = True
 
         self.update()
 
     def rclick_handle(self):
         time.sleep(self.db_rclick_delay)
-        if self.db_clicked:
-            self.db_clicked = False
+        if self.db_rclicked:
+            self.db_rclicked = False
         else:
             self.current = None
             self.drawingPolygon.emit(False)
             self.update()
             self.discard_moving()
-
 
     def mouseReleaseEvent(self, ev):
         #     if not menu.exec_(self.mapToGlobal(ev.pos())) and self.selected_shape_copy:
@@ -399,16 +404,23 @@ class Canvas(QWidget):
             if not self.selected_shape:
                 self.select_shape_point(self.last_pos)
             self.delete_selected()
-            self.db_clicked = True
+            self.db_rclicked = True
 
         if self.can_close_shape() and len(self.current) > 3:
             self.current.pop_point()
             self.finalise()
 
+        if ev.button() == Qt.MiddleButton:
+            self.zoomResetRequest.emit()
+            QApplication.setOverrideCursor(QCursor(Qt.OpenHandCursor))
+            self.panning = False
+            self.override_cursor(CURSOR_DEFAULT)
+
     def select_shape(self, shape):
         self.de_select_shape()
         shape.selected = True
         self.selected_shape = shape
+        self.last_selected_shape = shape
         self.set_hiding()
         self.selectionChanged.emit(True)
         self.update()
@@ -521,9 +533,11 @@ class Canvas(QWidget):
             shape = self.selected_shape
             self.shapes.remove(self.selected_shape)
             self.selected_shape = None
+            self.last_selected_shape = None
             self.update()
             self.moving_box = False
             self.moving_box = False
+            self.dirtySignal.emit()
             return shape
 
     def copy_selected_shape(self):
@@ -692,6 +706,30 @@ class Canvas(QWidget):
             self.move_one_pixel('Up')
         elif key == Qt.Key_Down and self.selected_shape:
             self.move_one_pixel('Down')
+
+        elif key == Qt.Key_Q:
+            self.focus_next_shape()
+
+    def focus_next_shape(self):
+        if not self.shapes:
+            return
+        if not self.last_selected_shape:
+            next_index = 0
+        else:
+            next_index = self.shapes.index(self.last_selected_shape) + 1
+        for i in range(len(self.shapes)):
+            print(next_index)
+            print(len(self.shapes))
+            print(next_index % len(self.shapes))
+            shape = self.shapes[next_index % len(self.shapes)]
+            print(shape)
+            print(shape.label)
+
+            if shape.label == 'hand':
+                break
+            else:
+                next_index += 1
+        self.select_shape(self.shapes[next_index % len(self.shapes)])
 
     def discard_moving(self):
         self.moving_box = False

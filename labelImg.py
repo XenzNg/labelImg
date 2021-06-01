@@ -183,6 +183,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.color_dialog = ColorDialog(parent=self)
 
         self.canvas = Canvas(parent=self)
+        self.canvas.dirtySignal.connect(self.set_dirty)
         self.canvas.zoomRequest.connect(self.zoom_request)
         self.canvas.zoomResetRequest.connect(self.set_fit_window)
         self.canvas.set_drawing_shape_to_square(settings.get(SETTING_DRAW_SQUARE, False))
