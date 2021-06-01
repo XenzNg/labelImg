@@ -24,6 +24,7 @@ CURSOR_GRAB = Qt.OpenHandCursor
 
 
 class Canvas(QWidget):
+    focusSignal = pyqtSignal(Shape)
     dirtySignal = pyqtSignal()
     zoomRequest = pyqtSignal(int, int, int, int, int)
     zoomResetRequest = pyqtSignal()
@@ -579,7 +580,7 @@ class Canvas(QWidget):
         for shape in self.shapes:
             if (shape.selected or not self._hide_background) and self.isVisible(shape):
                 shape.fill = shape.selected or shape == self.h_shape
-                shape.paint(p)
+                shape.paint(p, shapes=self.shapes)
         if self.current:
             self.current.paint(p)
             self.line.paint(p)
@@ -707,29 +708,31 @@ class Canvas(QWidget):
         elif key == Qt.Key_Down and self.selected_shape:
             self.move_one_pixel('Down')
 
+        elif key == Qt.Key_Q and ev.modifiers() & Qt.ShiftModifier:
+            self.focus_next_shape(_reversed=True)
+
         elif key == Qt.Key_Q:
             self.focus_next_shape()
 
-    def focus_next_shape(self):
+    def focus_next_shape(self, _reversed=False):
         if not self.shapes:
             return
+        if _reversed:
+            increment = -1
+        else:
+            increment = 1
         if not self.last_selected_shape:
             next_index = 0
         else:
-            next_index = self.shapes.index(self.last_selected_shape) + 1
+            next_index = self.shapes.index(self.last_selected_shape) + increment
         for i in range(len(self.shapes)):
-            print(next_index)
-            print(len(self.shapes))
-            print(next_index % len(self.shapes))
             shape = self.shapes[next_index % len(self.shapes)]
-            print(shape)
-            print(shape.label)
-
             if shape.label == 'hand':
+                self.select_shape(self.shapes[next_index % len(self.shapes)])
+                self.focusSignal.emit(self.shapes[next_index % len(self.shapes)])
                 break
             else:
-                next_index += 1
-        self.select_shape(self.shapes[next_index % len(self.shapes)])
+                next_index += increment
 
     def discard_moving(self):
         self.moving_box = False

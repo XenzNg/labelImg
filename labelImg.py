@@ -184,6 +184,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.canvas = Canvas(parent=self)
         self.canvas.dirtySignal.connect(self.set_dirty)
+        self.canvas.focusSignal.connect(self.focus_shape)
         self.canvas.zoomRequest.connect(self.zoom_request)
         self.canvas.zoomResetRequest.connect(self.set_fit_window)
         self.canvas.set_drawing_shape_to_square(settings.get(SETTING_DRAW_SQUARE, False))
@@ -1002,6 +1003,41 @@ class MainWindow(QMainWindow, WindowMixin):
     def add_zoom(self, increment=10):
         self.set_zoom(self.zoom_widget.value() + increment)
 
+    def focus_shape(self, rect):
+        x_coords = []
+        y_coords = []
+        for item in rect.points:
+            x_coords.append(item.x())
+            y_coords.append(item.y())
+        center_x = (max(x_coords) + min(x_coords)) / 2
+        center_y = (max(y_coords) + min(y_coords)) / 2
+        rect_width = max(x_coords) - min(x_coords)
+        rect_height = max(y_coords) - min(y_coords)
+
+        h_bar = self.scroll_bars[Qt.Horizontal]
+        v_bar = self.scroll_bars[Qt.Vertical]
+
+        canvas_view_x = self.canvas.frameGeometry().width() - h_bar.maximum()
+        canvas_view_y = self.canvas.frameGeometry().height() - v_bar.maximum()
+
+        screen_ratio = 0.4
+        zoom_scale_x = canvas_view_x / rect_width * screen_ratio
+        zoom_scale_y = canvas_view_y / rect_height * screen_ratio
+
+        zoom_value = min(min(zoom_scale_x, zoom_scale_y) * 100, self.zoom_widget.maximum())
+
+        self.set_zoom(zoom_value)
+
+        canvas_view_x = self.canvas.frameGeometry().width() - h_bar.maximum()
+        canvas_view_y = self.canvas.frameGeometry().height() - v_bar.maximum()
+
+        center_x_scaled, center_y_scaled = center_x * zoom_value / 100, center_y * zoom_value / 100
+        canvas_view_center_x, canvas_view_center_y = canvas_view_x / 2, canvas_view_y / 2
+
+        # Move rect center to view port center
+        h_bar.setValue(int(center_x_scaled - canvas_view_center_x))
+        v_bar.setValue(int(center_y_scaled - canvas_view_center_y))
+
     def zoom_request(self, delta, painter_x, painter_y, canvas_cursor_x, canvas_cursor_y):
         # get the current scrollbar positions
         # calculate the percentages ~ coordinates
@@ -1214,7 +1250,7 @@ class MainWindow(QMainWindow, WindowMixin):
     def paint_canvas(self):
         assert not self.image.isNull(), "cannot paint null image"
         self.canvas.scale = 0.01 * self.zoom_widget.value()
-        self.canvas.label_font_size = int(0.02 * max(self.image.width(), self.image.height()))
+        self.canvas.label_font_size = int(0.01 * max(self.image.width(), self.image.height()))
         self.canvas.adjustSize()
         self.canvas.update()
 

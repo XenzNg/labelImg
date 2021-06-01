@@ -37,7 +37,7 @@ class Shape(object):
     point_type = P_ROUND
     point_size = 8
     scale = 1.0
-    label_font_size = 8
+    label_font_size = 4
 
     def __init__(self, label=None, line_color=None, difficult=False, paint_label=False):
         self.label = label
@@ -85,7 +85,7 @@ class Shape(object):
     def set_open(self):
         self._closed = False
 
-    def paint(self, painter):
+    def paint(self, painter, shapes):
         if self.points:
             # color = self.select_line_color if self.selected else self.line_color
             color = self.select_line_color if self.selected else QColor(0, 255, 0, 125)
@@ -120,7 +120,8 @@ class Shape(object):
                 min_y_label = int(1.25 * self.label_font_size)
                 for point in self.points:
                     min_x = min(min_x, point.x())
-                    min_y = min(min_y, point.y())
+                    # min_y = min(min_y, point.y())
+                    min_y = min(min_y, point.y() - 1)
                 if min_x != sys.maxsize and min_y != sys.maxsize:
                     font = QFont()
                     font.setPointSize(self.label_font_size)
@@ -130,7 +131,13 @@ class Shape(object):
                         self.label = ""
                     if min_y < min_y_label:
                         min_y += min_y_label
-                    painter.drawText(min_x, min_y, self.label)
+                    shapes_hand = [item for item in shapes if item.label == 'hand']
+                    if self in shapes_hand:
+                        current_shape_index = shapes_hand.index(self)
+                        txt = '{} ({}/{})'.format(self.label, current_shape_index + 1, len(shapes_hand))
+                    else:
+                        txt = self.label
+                    painter.drawText(min_x, min_y, txt)
 
             if self.fill:
                 color = self.select_fill_color if self.selected else self.fill_color
