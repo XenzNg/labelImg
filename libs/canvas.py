@@ -227,8 +227,9 @@ class Canvas(QWidget):
             delta_x = pos.x() - self.pan_initial_pos.x()
             delta_y = pos.y() - self.pan_initial_pos.y()
 
-            self.scrollRequest.emit(delta_x * 50, Qt.Horizontal)
-            self.scrollRequest.emit(delta_y * 50, Qt.Vertical)
+            scale = 5
+            self.scrollRequest.emit(delta_x * scale, Qt.Horizontal)
+            self.scrollRequest.emit(delta_y * scale, Qt.Vertical)
             self.update()
             return
 

@@ -533,9 +533,14 @@ class MainWindow(QMainWindow, WindowMixin):
             if not os.path.exists(_dir):
                 os.makedirs(_dir)
 
-        self.import_dir_images(dir_path=file_counter_config.jpeg_dir)
-        self.zoom_mode = self.FIT_WINDOW
-        self.adjust_scale()
+        if file_counter_config.jpeg_dir and os.path.exists(file_counter_config.jpeg_dir):
+            print('loading initial images')
+            self.import_dir_images(dir_path=file_counter_config.jpeg_dir)
+            if len(self.m_img_list) > 0:
+                self.zoom_mode = self.FIT_WINDOW
+                self.adjust_scale()
+        else:
+            print('invalid jpeg_dir path')
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Control:
@@ -1083,7 +1088,7 @@ class MainWindow(QMainWindow, WindowMixin):
         # elif units < 0:
         #     self.add_zoom(self.zoom_widget.value() * (1 - 1/zoom_factor) * units)
 
-        self.add_zoom(units*200)
+        self.add_zoom(units*20)
 
         # get the difference in scrollbar values
         # this is how far we can move
