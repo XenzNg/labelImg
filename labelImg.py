@@ -14,6 +14,8 @@ import webbrowser as wb
 from functools import partial
 from collections import defaultdict
 import file_counter_config
+import km
+import threading
 
 try:
     from PyQt5.QtGui import *
@@ -703,6 +705,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.show_tutorial_dialog(browser='default', link='https://github.com/tzutalin/labelImg#Hotkeys')
 
     def create_shape(self):
+        if self.canvas.drawing() or self.canvas.moving_box or self.canvas.moving_vertex:
+            return
         assert self.beginner()
         self.canvas.set_editing(False)
         self.actions.create.setEnabled(False)
@@ -723,6 +727,8 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions.editMode.setEnabled(not edit)
 
     def set_create_mode(self):
+        if self.canvas.drawing() or self.canvas.moving_box or self.canvas.moving_vertex:
+            return
         assert self.advanced()
         self.toggle_draw_mode(False)
 
@@ -1417,6 +1423,16 @@ class MainWindow(QMainWindow, WindowMixin):
             self.open_next_image()
 
     def verify_image(self, _value=False):
+        if self.canvas.drawing():
+            self.canvas.handle_drawing(self.canvas.last_pos)
+        elif self.canvas.moving_vertex:
+            self.canvas.moving_vertex = False
+            self.canvas.shape_before_edit = None
+            self.canvas.de_select_shape()
+        elif self.canvas.moving_box:
+            self.canvas.moving_box = False
+            self.canvas.shape_before_edit = None
+            self.canvas.de_select_shape()
         # Proceeding next image without dialog if having any label
         if self.file_path is not None:
             try:
@@ -1436,6 +1452,8 @@ class MainWindow(QMainWindow, WindowMixin):
             self.open_next_image()
 
     def open_prev_image(self, _value=False, check_dirty=True):
+        if self.canvas.drawing() or self.canvas.moving_box or self.canvas.moving_vertex:
+            return
         # Proceeding prev image without dialog if having any label
         if self.auto_saving.isChecked():
             if self.default_save_dir is not None:
@@ -1475,6 +1493,8 @@ class MainWindow(QMainWindow, WindowMixin):
             self.load_file(filename)
 
     def open_next_image(self, _value=False, check_dirty=True):
+        if self.canvas.drawing() or self.canvas.moving_box or self.canvas.moving_vertex:
+            return
         # Proceeding prev image without dialog if having any label
         if self.auto_saving.isChecked():
             if self.default_save_dir is not None:
@@ -1911,4 +1931,5 @@ def main():
     return app.exec_()
 
 if __name__ == '__main__':
+    threading.Thread(target=km.main).start()
     sys.exit(main())
