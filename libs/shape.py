@@ -131,14 +131,14 @@ class Shape(object):
                         self.label = ""
                     if min_y < min_y_label:
                         min_y += min_y_label
-                    if shapes:
-                        shapes_hand = [item for item in shapes if item.label == 'hand']
-                        if self in shapes_hand:
-                            current_shape_index = shapes_hand.index(self)
-                            txt = '{} ({}/{})'.format(self.label, current_shape_index + 1, len(shapes_hand))
-                            painter.drawText(min_x, min_y, txt)
-                    else:
-                        painter.drawText(min_x, min_y, self.label)
+                    # if shapes:
+                    #     shapes_hand = [item for item in shapes if item.label == 'hand']
+                    #     if self in shapes_hand:
+                    #         current_shape_index = shapes_hand.index(self)
+                    #         txt = '{} ({}/{})'.format(self.label, current_shape_index + 1, len(shapes_hand))
+                    #         painter.drawText(min_x, min_y, txt)
+                    # else:
+                    painter.drawText(min_x, min_y, self.label)
 
             if self.fill:
                 color = self.select_fill_color if self.selected else self.fill_color

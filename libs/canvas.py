@@ -600,7 +600,7 @@ class Canvas(QWidget):
             p.drawRect(left_top.x(), left_top.y(), rect_width, rect_height)
 
         if self.drawing() and not self.prev_point.isNull() and not self.out_of_pixmap(self.prev_point):
-            p.setPen(QColor(0, 0, 0))
+            p.setPen(QColor(0, 255, 0))
             p.drawLine(self.prev_point.x(), 0, self.prev_point.x(), self.pixmap.height())
             p.drawLine(0, self.prev_point.y(), self.pixmap.width(), self.prev_point.y())
 
@@ -716,6 +716,7 @@ class Canvas(QWidget):
             self.focus_next_shape()
 
     def focus_next_shape(self, _reversed=False):
+        return
         if not self.shapes:
             return
         if _reversed:
@@ -744,26 +745,26 @@ class Canvas(QWidget):
         self.de_select_shape()
 
     def move_one_pixel(self, direction):
-        # print(self.selectedShape.points)
-        if direction == 'Left' and not self.move_out_of_bound(QPointF(-1.0, 0)):
+        pixels = 1.0
+        if direction == 'Left' and not self.move_out_of_bound(QPointF(-1.0 * pixels, 0)):
             # print("move Left one pixel")
             self.selected_shape.points[0] += QPointF(-1.0, 0)
             self.selected_shape.points[1] += QPointF(-1.0, 0)
             self.selected_shape.points[2] += QPointF(-1.0, 0)
             self.selected_shape.points[3] += QPointF(-1.0, 0)
-        elif direction == 'Right' and not self.move_out_of_bound(QPointF(1.0, 0)):
+        elif direction == 'Right' and not self.move_out_of_bound(QPointF(1.0 * pixels, 0)):
             # print("move Right one pixel")
             self.selected_shape.points[0] += QPointF(1.0, 0)
             self.selected_shape.points[1] += QPointF(1.0, 0)
             self.selected_shape.points[2] += QPointF(1.0, 0)
             self.selected_shape.points[3] += QPointF(1.0, 0)
-        elif direction == 'Up' and not self.move_out_of_bound(QPointF(0, -1.0)):
+        elif direction == 'Up' and not self.move_out_of_bound(QPointF(0, -1.0 * pixels)):
             # print("move Up one pixel")
             self.selected_shape.points[0] += QPointF(0, -1.0)
             self.selected_shape.points[1] += QPointF(0, -1.0)
             self.selected_shape.points[2] += QPointF(0, -1.0)
             self.selected_shape.points[3] += QPointF(0, -1.0)
-        elif direction == 'Down' and not self.move_out_of_bound(QPointF(0, 1.0)):
+        elif direction == 'Down' and not self.move_out_of_bound(QPointF(0, 1.0 * pixels)):
             # print("move Down one pixel")
             self.selected_shape.points[0] += QPointF(0, 1.0)
             self.selected_shape.points[1] += QPointF(0, 1.0)
@@ -771,6 +772,33 @@ class Canvas(QWidget):
             self.selected_shape.points[3] += QPointF(0, 1.0)
         self.shapeMoved.emit()
         self.repaint()
+        # # print(self.selectedShape.points)
+        # if direction == 'Left' and not self.move_out_of_bound(QPointF(-1.0, 0)):
+        #     # print("move Left one pixel")
+        #     self.selected_shape.points[0] += QPointF(-1.0, 0)
+        #     self.selected_shape.points[1] += QPointF(-1.0, 0)
+        #     self.selected_shape.points[2] += QPointF(-1.0, 0)
+        #     self.selected_shape.points[3] += QPointF(-1.0, 0)
+        # elif direction == 'Right' and not self.move_out_of_bound(QPointF(1.0, 0)):
+        #     # print("move Right one pixel")
+        #     self.selected_shape.points[0] += QPointF(1.0, 0)
+        #     self.selected_shape.points[1] += QPointF(1.0, 0)
+        #     self.selected_shape.points[2] += QPointF(1.0, 0)
+        #     self.selected_shape.points[3] += QPointF(1.0, 0)
+        # elif direction == 'Up' and not self.move_out_of_bound(QPointF(0, -1.0)):
+        #     # print("move Up one pixel")
+        #     self.selected_shape.points[0] += QPointF(0, -1.0)
+        #     self.selected_shape.points[1] += QPointF(0, -1.0)
+        #     self.selected_shape.points[2] += QPointF(0, -1.0)
+        #     self.selected_shape.points[3] += QPointF(0, -1.0)
+        # elif direction == 'Down' and not self.move_out_of_bound(QPointF(0, 1.0)):
+        #     # print("move Down one pixel")
+        #     self.selected_shape.points[0] += QPointF(0, 1.0)
+        #     self.selected_shape.points[1] += QPointF(0, 1.0)
+        #     self.selected_shape.points[2] += QPointF(0, 1.0)
+        #     self.selected_shape.points[3] += QPointF(0, 1.0)
+        # self.shapeMoved.emit()
+        # self.repaint()
 
     def move_out_of_bound(self, step):
         points = [p1 + p2 for p1, p2 in zip(self.selected_shape.points, [step] * 4)]

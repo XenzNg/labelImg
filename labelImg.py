@@ -963,7 +963,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 self.label_dialog = LabelDialog(
                     parent=self, list_item=self.label_hist)
 
-            text = 'hand'
+            text = file_counter_config.current_label
 
             # # Sync single class mode from PR#106
             # if self.single_class_mode.isChecked() and self.lastLabel:
