@@ -4,7 +4,7 @@ import win32gui
 
 w = win32gui
 mouse = Controller()
-pixels = 2
+pixels = 4
 
 
 def on_press(key):
