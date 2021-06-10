@@ -13,6 +13,7 @@ import webbrowser as wb
 
 from functools import partial
 from collections import defaultdict
+import file_counter_config
 
 try:
     from PyQt5.QtGui import *
@@ -92,7 +93,7 @@ class MainWindow(QMainWindow, WindowMixin):
         get_str = lambda str_id: self.string_bundle.get_string(str_id)
 
         # Save as Pascal voc xml
-        self.default_save_dir = default_save_dir
+        self.default_save_dir = file_counter_config.annotation_dir
         self.label_file_format = settings.get(SETTING_LABEL_FILE_FORMAT, LabelFileFormat.PASCAL_VOC)
 
         # For loading all image under a directory
@@ -111,7 +112,12 @@ class MainWindow(QMainWindow, WindowMixin):
         self.screencast = "https://youtu.be/p0nR2YsCY_U"
 
         # Load predefined classes to the list
-        self.load_predefined_classes(default_prefdef_class_file)
+        if default_prefdef_class_file is not None:
+            self.load_predefined_classes(default_prefdef_class_file)
+
+        for item in file_counter_config.labels:
+            if item not in self.label_hist:
+                self.label_hist.append(item)
 
         # Main widgets and related state.
         self.label_dialog = LabelDialog(parent=self, list_item=self.label_hist)
@@ -237,6 +243,22 @@ class MainWindow(QMainWindow, WindowMixin):
         save = action(get_str('save'), self.save_file,
                       'Ctrl+S', 'save', get_str('saveDetail'), enabled=False)
 
+        self.dir_report = file_counter_config.report_dir
+        if not os.path.exists(self.dir_report):
+            print('Invalid report directory: {}'.format(self.dir_report))
+            sys.exit(-1)
+        self.dir_annotation = os.path.join(self.dir_report, 'Annotations')
+        if not os.path.exists(self.dir_annotation):
+            os.makedirs(self.dir_annotation)
+        self.dir_verified = os.path.join(self.dir_report, 'JPEGImages')
+        self.dir_abnormal = os.path.join(self.dir_report, 'AbnormalImages')
+        self.dir_confused = os.path.join(self.dir_report, 'ConfusedImages')
+        self.image_categories = [self.dir_verified, self.dir_abnormal, self.dir_confused]
+        for _dir in self.image_categories:
+            if not os.path.exists(_dir):
+                os.makedirs(_dir)
+
+
         def get_format_meta(format):
             """
             returns a tuple containing (title, icon_name) of the selected format
@@ -259,6 +281,8 @@ class MainWindow(QMainWindow, WindowMixin):
         close = action(get_str('closeCur'), self.close_file, 'Ctrl+W', 'close', get_str('closeCurDetail'))
 
         delete_image = action(get_str('deleteImg'), self.delete_image, 'Ctrl+Shift+D', 'close', get_str('deleteImgDetail'))
+
+        confused_image = action('Confused Image', self.confused_image, 'Ctrl+Shift+C', 'close')
 
         reset_all = action(get_str('resetAll'), self.reset_all, None, 'resetall', get_str('resetAllDetail'))
 
@@ -400,7 +424,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.display_label_option.triggered.connect(self.toggle_paint_labels_option)
 
         add_actions(self.menus.file,
-                    (open, open_dir, change_save_dir, open_annotation, copy_prev_bounding, self.menus.recentFiles, save, save_format, save_as, close, reset_all, delete_image, quit))
+                    (open, open_dir, change_save_dir, open_annotation, copy_prev_bounding, self.menus.recentFiles, save, save_format, save_as, close, reset_all, delete_image, confused_image, quit))
         add_actions(self.menus.help, (help_default, show_info, show_shortcut))
         add_actions(self.menus.view, (
             self.auto_saving,
@@ -1060,6 +1084,15 @@ class MainWindow(QMainWindow, WindowMixin):
             if unicode_file_path in self.m_img_list:
                 index = self.m_img_list.index(unicode_file_path)
                 file_widget_item = self.file_list_widget.item(index)
+                rect = self.file_list_widget.viewport().contentsRect()
+                self.file_list_widget.row(self.file_list_widget.itemAt(rect.topLeft()))
+                top_index = self.file_list_widget.row(self.file_list_widget.itemAt(rect.topLeft()))
+                bottom_index = self.file_list_widget.row(self.file_list_widget.itemAt(rect.bottomRight()))
+                if index >= bottom_index:
+                    self.file_list_widget.scrollToItem(file_widget_item, QAbstractItemView.PositionAtBottom)
+                if index < top_index:
+                    self.file_list_widget.scrollToItem(file_widget_item, QAbstractItemView.PositionAtTop)
+
                 file_widget_item.setSelected(True)
             else:
                 self.file_list_widget.clear()
@@ -1289,7 +1322,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.last_open_dir = target_dir_path
         self.import_dir_images(target_dir_path)
 
-    def import_dir_images(self, dir_path):
+    def import_dir_images(self, dir_path, prev=False):
         if not self.may_continue() or not dir_path:
             return
 
@@ -1297,12 +1330,31 @@ class MainWindow(QMainWindow, WindowMixin):
         self.dir_name = dir_path
         self.file_path = None
         self.file_list_widget.clear()
-        self.m_img_list = self.scan_all_images(dir_path)
+        # self.m_img_list = self.scan_all_images(dir_path)
+        self.m_img_list = []
+        for file_name in os.listdir(dir_path):
+            if file_name[-4:] != '.jpg':
+                continue
+            full_path = os.path.join(dir_path, file_name).replace('/', '\\')
+            self.m_img_list.append(full_path)
         self.img_count = len(self.m_img_list)
-        self.open_next_image()
+
         for imgPath in self.m_img_list:
             item = QListWidgetItem(imgPath)
             self.file_list_widget.addItem(item)
+
+            abnormal_images = os.listdir(self.dir_abnormal)
+            verified_images = os.listdir(self.dir_verified)
+            file_widget_item = self.file_list_widget.item(self.file_list_widget.count() - 1)
+
+            if os.path.basename(imgPath) in verified_images:
+                file_widget_item.setBackground(QColor('#7fc97f'))
+            elif os.path.basename(imgPath) in abnormal_images:
+                file_widget_item.setBackground(QColor('#FF6B6B'))
+        if prev:
+            self.open_prev_image()
+        else:
+            self.open_next_image()
 
     def verify_image(self, _value=False):
         # Proceeding next image without dialog if having any label
@@ -1321,8 +1373,9 @@ class MainWindow(QMainWindow, WindowMixin):
             self.canvas.verified = self.label_file.verified
             self.paint_canvas()
             self.save_file()
+            self.open_next_image()
 
-    def open_prev_image(self, _value=False):
+    def open_prev_image(self, _value=False, check_dirty=True):
         # Proceeding prev image without dialog if having any label
         if self.auto_saving.isChecked():
             if self.default_save_dir is not None:
@@ -1332,22 +1385,33 @@ class MainWindow(QMainWindow, WindowMixin):
                 self.change_save_dir_dialog()
                 return
 
-        if not self.may_continue():
-            return
+        if check_dirty:
+            if not self.may_continue():
+                return
 
         if self.img_count <= 0:
             return
 
+        filename = None
         if self.file_path is None:
-            return
+            filename = self.m_img_list[-1]
+            self.cur_img_idx = len(self.m_img_list)
 
         if self.cur_img_idx - 1 >= 0:
             self.cur_img_idx -= 1
             filename = self.m_img_list[self.cur_img_idx]
-            if filename:
-                self.load_file(filename)
 
-    def open_next_image(self, _value=False):
+        else:
+            index_folder = os.path.dirname(self.last_open_dir)
+            current_folder_index = os.path.basename(index_folder)
+            prev_index = int(current_folder_index) - 1
+            prev_folder = os.path.join(os.path.dirname(index_folder), str(prev_index), 'JPEGImages')
+            if os.path.exists(prev_folder):
+                self.import_dir_images(prev_folder, prev=True)
+        if filename:
+            self.load_file(filename)
+
+    def open_next_image(self, _value=False, check_dirty=True):
         # Proceeding prev image without dialog if having any label
         if self.auto_saving.isChecked():
             if self.default_save_dir is not None:
@@ -1357,8 +1421,9 @@ class MainWindow(QMainWindow, WindowMixin):
                 self.change_save_dir_dialog()
                 return
 
-        if not self.may_continue():
-            return
+        if check_dirty:
+            if not self.may_continue():
+                return
 
         if self.img_count <= 0:
             return
@@ -1371,6 +1436,13 @@ class MainWindow(QMainWindow, WindowMixin):
             if self.cur_img_idx + 1 < self.img_count:
                 self.cur_img_idx += 1
                 filename = self.m_img_list[self.cur_img_idx]
+            else:
+                index_folder = os.path.dirname(self.last_open_dir)
+                current_folder_index = os.path.basename(index_folder)
+                next_index = int(current_folder_index) + 1
+                next_folder = os.path.join(os.path.dirname(index_folder), str(next_index), 'JPEGImages')
+                if os.path.exists(next_folder):
+                    self.import_dir_images(next_folder)
 
         if filename:
             self.load_file(filename)
@@ -1395,7 +1467,34 @@ class MainWindow(QMainWindow, WindowMixin):
                 image_file_name = os.path.basename(self.file_path)
                 saved_file_name = os.path.splitext(image_file_name)[0]
                 saved_path = os.path.join(ustr(self.default_save_dir), saved_file_name)
+
+                # Copy paths
+                xml_path = saved_path + '.xml'
+                dest_annotation = os.path.join(self.dir_annotation, saved_file_name) + '.xml'
+                dest_img = os.path.join(self.dir_verified, image_file_name)
+
                 self._save_file(saved_path)
+                # Copy to verified folder
+                shutil.copy(xml_path, dest_annotation)
+                shutil.copy(self.file_path, dest_img)
+                # Remove from abnormal and confused
+                path_img_abnormal = os.path.join(self.dir_abnormal, image_file_name)
+                path_img_confused = os.path.join(self.dir_confused, image_file_name)
+                if os.path.exists(path_img_abnormal):
+                    os.remove(path_img_abnormal)
+                if os.path.exists(path_img_confused):
+                    os.remove(path_img_confused)
+
+                # Set green color
+                index = self.m_img_list.index(self.file_path)
+                file_widget_item = self.file_list_widget.item(index)
+                file_widget_item.setBackground(QColor('#7fc97f'))
+
+                self.update_report_summary('Set_verified')
+
+                self.open_next_image()
+                self.statusBar().showMessage('[Set to Verified] Saved to  {} and {}'.format(dest_img, dest_annotation))
+                self.statusBar().show()
         else:
             image_file_dir = os.path.dirname(self.file_path)
             image_file_name = os.path.basename(self.file_path)
@@ -1429,7 +1528,7 @@ class MainWindow(QMainWindow, WindowMixin):
     def _save_file(self, annotation_file_path):
         if annotation_file_path and self.save_labels(annotation_file_path):
             self.set_clean()
-            self.statusBar().showMessage('Saved to  %s' % annotation_file_path)
+            self.statusBar().showMessage('[Set to Verified] Saved to  %s' % annotation_file_path)
             self.statusBar().show()
 
     def close_file(self, _value=False):
@@ -1442,14 +1541,126 @@ class MainWindow(QMainWindow, WindowMixin):
         self.actions.saveAs.setEnabled(False)
 
     def delete_image(self):
-        delete_path = self.file_path
-        if delete_path is not None:
-            self.open_next_image()
-            self.cur_img_idx -= 1
-            self.img_count -= 1
-            if os.path.exists(delete_path):
-                os.remove(delete_path)
-            self.import_dir_images(self.last_open_dir)
+        """ Set to abnormal """
+        img_name = os.path.basename(self.file_path)
+        xml_name = img_name.replace('.jpg', '.xml')
+        path_img_abnormal = os.path.join(self.dir_abnormal, img_name)
+        shutil.copy(self.file_path, path_img_abnormal)
+        # Remove from verified
+        path_xml = os.path.join(self.dir_annotation, xml_name)
+        path_img_verified = os.path.join(self.dir_verified, img_name)
+        if os.path.exists(path_img_verified):
+            os.remove(path_img_verified)
+        if os.path.exists(path_xml):
+            os.remove(path_xml)
+        # Remove from confused
+        path_img_confused = os.path.join(self.dir_confused, img_name)
+        if os.path.exists(path_img_confused):
+            os.remove(path_img_confused)
+
+        # Set red color
+        index = self.m_img_list.index(self.file_path)
+        file_widget_item = self.file_list_widget.item(index)
+        file_widget_item.setBackground(QColor('#FF6B6B'))
+
+        self.update_report_summary('Set_abnormal')
+        self.open_next_image(check_dirty=False)
+        self.statusBar().showMessage('[Set to Abnormal] Saved to  %s' % path_img_abnormal)
+        self.statusBar().show()
+
+        # delete_path = self.file_path
+        # if delete_path is not None:
+        #     self.open_next_image()
+        #     self.cur_img_idx -= 1
+        #     self.img_count -= 1
+        #     if os.path.exists(delete_path):
+        #         os.remove(delete_path)
+        #     self.import_dir_images(self.last_open_dir)
+
+    def confused_image(self):
+        """ Set to confused """
+        img_name = os.path.basename(self.file_path)
+        xml_name = img_name.replace('.jpg', '.xml')
+        path_img_confused = os.path.join(self.dir_confused, img_name)
+        shutil.copy(self.file_path, path_img_confused)
+        # Remove from verified
+        path_xml = os.path.join(self.dir_annotation, xml_name)
+        path_img_verified = os.path.join(self.dir_verified, img_name)
+        if os.path.exists(path_img_verified):
+            os.remove(path_img_verified)
+        if os.path.exists(path_xml):
+            os.remove(path_xml)
+
+        # Remove from abnormal
+        path_img_abnormal = os.path.join(self.dir_abnormal, img_name)
+        if os.path.exists(path_img_abnormal):
+            os.remove(path_img_abnormal)
+
+        # Set yellow color
+        index = self.m_img_list.index(self.file_path)
+        file_widget_item = self.file_list_widget.item(index)
+        file_widget_item.setBackground(QColor('#FFFF99'))
+
+        self.update_report_summary('Set_confused')
+
+        self.open_next_image(check_dirty=False)
+        self.statusBar().showMessage('[Set to Confused] Saved to  %s' % path_img_confused)
+        self.statusBar().show()
+
+    def update_report_summary(self, last_action):
+        from collections import OrderedDict
+        import json
+
+        dict_count = OrderedDict()
+        count_verified = len(os.listdir(self.dir_verified))
+        count_abnormal = len(os.listdir(self.dir_abnormal))
+        count_confused = len(os.listdir(self.dir_confused))
+        count_total = sum([count_confused, count_abnormal, count_verified])
+        dict_count['Verified'] = count_verified
+        dict_count['Abnormal'] = count_abnormal
+        dict_count['Confused'] = count_confused
+        dict_count['Total'] = count_total
+
+        dict_last_action = OrderedDict()
+        dict_last_action['File_path'] = self.file_path
+        dict_last_action['Action'] = last_action
+
+        dict_image_folders = OrderedDict()
+        # Read existing completed image folders
+        summary_file = os.path.join(self.dir_report, 'summary.txt')
+        _list_of_image_folders = []
+        if os.path.exists(summary_file):
+            with open(summary_file, 'r') as f:
+                data = json.load(f)
+                print(data)
+                if 'Marked_folders' in data:
+                    _list_of_image_folders = list(data['Marked_folders'].keys())
+        if self.last_open_dir not in _list_of_image_folders:
+            _list_of_image_folders.append(self.last_open_dir)
+
+        _images_verified = os.listdir(self.dir_verified)
+        _images_abnormal = os.listdir(self.dir_abnormal)
+        _images_confused = os.listdir(self.dir_confused)
+        for _image_folder in _list_of_image_folders:
+            _current_images = os.listdir(_image_folder)
+            _count_verified = len(set(_current_images) & set(_images_verified))
+            _count_abnormal = len(set(_current_images) & set(_images_abnormal))
+            _count_confused = len(set(_current_images) & set(_images_confused))
+            _count_total = sum([_count_confused, _count_abnormal, _count_verified])
+            _folder_detail = OrderedDict()
+            _folder_detail['Verified'] = _count_verified
+            _folder_detail['Abnormal'] = _count_abnormal
+            _folder_detail['Confused'] = _count_confused
+            _folder_detail['Total'] = _count_total
+            dict_image_folders[_image_folder] = _folder_detail
+
+        dict_main = OrderedDict()
+        dict_main['Count'] = dict_count
+        dict_main['Last_action'] = dict_last_action
+        dict_main['Marked_folders'] = dict_image_folders
+
+        with open(summary_file, 'w+') as f:
+            json.dump(dict_main, f, indent=4)
 
     def reset_all(self):
         self.settings.reset()
@@ -1612,7 +1823,7 @@ def get_main_app(argv=[]):
     argparser = argparse.ArgumentParser()
     argparser.add_argument("image_dir", nargs="?")
     argparser.add_argument("class_file",
-                           default=os.path.join(os.path.dirname(__file__), "data", "predefined_classes.txt"),
+                           # default=os.path.join(os.path.dirname(__file__), "data", "predefined_classes.txt"),
                            nargs="?")
     argparser.add_argument("save_dir", nargs="?")
     args = argparser.parse_args(argv[1:])
