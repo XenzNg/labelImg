@@ -15,7 +15,7 @@ from functools import partial
 from collections import defaultdict
 import file_counter_config
 import km
-import threading
+import wd
 
 try:
     from PyQt5.QtGui import *
@@ -543,6 +543,12 @@ class MainWindow(QMainWindow, WindowMixin):
                 self.adjust_scale()
         else:
             print('invalid jpeg_dir path')
+
+        # wd.set_qt_window(self)
+        self.wdSignalSender = wd.SignalSender()
+        self.wdSignalSender.updateHighlightSignal.connect(self.set_filelist_highlight)
+        wd.set_sender_obj(self.wdSignalSender)
+        self.updating_highlight = False
 
     def keyReleaseEvent(self, event):
         if event.key() == Qt.Key_Control:
@@ -1411,12 +1417,15 @@ class MainWindow(QMainWindow, WindowMixin):
 
             abnormal_images = os.listdir(self.dir_abnormal)
             verified_images = os.listdir(self.dir_verified)
+            confused_images = os.listdir(self.dir_confused)
             file_widget_item = self.file_list_widget.item(self.file_list_widget.count() - 1)
 
             if os.path.basename(imgPath) in verified_images:
                 file_widget_item.setBackground(QColor('#7fc97f'))
             elif os.path.basename(imgPath) in abnormal_images:
                 file_widget_item.setBackground(QColor('#FF6B6B'))
+            elif os.path.basename(imgPath) in confused_images:
+                file_widget_item.setBackground(QColor('#FFFF99'))
         if prev:
             self.open_prev_image()
         else:
@@ -1533,6 +1542,33 @@ class MainWindow(QMainWindow, WindowMixin):
         if filename:
             self.load_file(filename)
 
+    def set_filelist_highlight(self):
+        if self.updating_highlight:
+            return
+        self.updating_highlight = True
+        red = QColor('#FF6B6B')
+        green = QColor('#7fc97f')
+        yellow = QColor('#FFFF99')
+
+        _images_verified = os.listdir(self.dir_verified)
+        _images_abnormal = os.listdir(self.dir_abnormal)
+        _images_confused = os.listdir(self.dir_confused)
+
+        for item in self.m_img_list:
+            color = None
+            img_name = os.path.basename(item)
+            if img_name in _images_verified:
+                color = green
+            elif img_name in _images_abnormal:
+                color = red
+            elif img_name in _images_confused:
+                color = yellow
+            if color is not None:
+                index = self.m_img_list.index(item)
+                file_widget_item = self.file_list_widget.item(index)
+                file_widget_item.setBackground(color)
+        self.updating_highlight = False
+
     def open_file(self, _value=False):
         if not self.may_continue():
             return
@@ -1570,11 +1606,6 @@ class MainWindow(QMainWindow, WindowMixin):
                     os.remove(path_img_abnormal)
                 if os.path.exists(path_img_confused):
                     os.remove(path_img_confused)
-
-                # Set green color
-                index = self.m_img_list.index(self.file_path)
-                file_widget_item = self.file_list_widget.item(index)
-                file_widget_item.setBackground(QColor('#7fc97f'))
 
                 self.update_report_summary('Set_verified')
 
@@ -1644,11 +1675,6 @@ class MainWindow(QMainWindow, WindowMixin):
         if os.path.exists(path_img_confused):
             os.remove(path_img_confused)
 
-        # Set red color
-        index = self.m_img_list.index(self.file_path)
-        file_widget_item = self.file_list_widget.item(index)
-        file_widget_item.setBackground(QColor('#FF6B6B'))
-
         self.update_report_summary('Set_abnormal')
         self.open_next_image(check_dirty=False)
         self.statusBar().showMessage('[Set to Abnormal] Saved to  %s' % path_img_abnormal)
@@ -1681,11 +1707,6 @@ class MainWindow(QMainWindow, WindowMixin):
         path_img_abnormal = os.path.join(self.dir_abnormal, img_name)
         if os.path.exists(path_img_abnormal):
             os.remove(path_img_abnormal)
-
-        # Set yellow color
-        index = self.m_img_list.index(self.file_path)
-        file_widget_item = self.file_list_widget.item(index)
-        file_widget_item.setBackground(QColor('#FFFF99'))
 
         self.update_report_summary('Set_confused')
 
@@ -1931,5 +1952,9 @@ def main():
     return app.exec_()
 
 if __name__ == '__main__':
-    threading.Thread(target=km.main).start()
-    sys.exit(main())
+    km.start()
+    wd.start(file_counter_config.report_dir)
+    main()
+    km.stop()
+    wd.stop()
+    sys.exit()

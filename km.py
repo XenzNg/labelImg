@@ -25,11 +25,13 @@ def on_press(key):
         mouse.move(1 * pixels, 0)
 
 
-def main():
-    with keyboard.Listener(on_press=on_press) as listener:
-        print('running keyboard-mouse shortcut')
-        listener.join()
+t = keyboard.Listener(on_press=on_press)
 
 
-if __name__ == '__main__':
-    main()
+def start():
+    t.start()
+    print('running keyboard-mouse shortcut')
+
+
+def stop():
+    t.stop()
