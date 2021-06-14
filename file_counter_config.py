@@ -5,6 +5,4 @@ annotation_dir = r"X:\working-annotations"
 # jpeg_dir = r"X:\working-images\5000"
 jpeg_dir = r"X:\working-images\200"
 
-# current_label = "hand"
-# current_label = "mask"
-current_label = "face"
+labels = ['hand', 'mask', 'face']

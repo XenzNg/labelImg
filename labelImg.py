@@ -115,7 +115,12 @@ class MainWindow(QMainWindow, WindowMixin):
         self.screencast = "https://youtu.be/p0nR2YsCY_U"
 
         # Load predefined classes to the list
-        self.load_predefined_classes(default_prefdef_class_file)
+        if default_prefdef_class_file is not None:
+            self.load_predefined_classes(default_prefdef_class_file)
+
+        for item in file_counter_config.labels:
+            if item not in self.label_hist:
+                self.label_hist.append(item)
 
         # Main widgets and related state.
         self.label_dialog = LabelDialog(parent=self, list_item=self.label_hist)
@@ -544,10 +549,10 @@ class MainWindow(QMainWindow, WindowMixin):
         else:
             print('invalid jpeg_dir path')
 
-        # wd.set_qt_window(self)
         self.wdSignalSender = wd.SignalSender()
         self.wdSignalSender.updateHighlightSignal.connect(self.set_filelist_highlight)
         wd.set_sender_obj(self.wdSignalSender)
+        wd.start(file_counter_config.report_dir)
         self.updating_highlight = False
 
     def keyReleaseEvent(self, event):
@@ -975,14 +980,12 @@ class MainWindow(QMainWindow, WindowMixin):
                 self.label_dialog = LabelDialog(
                     parent=self, list_item=self.label_hist)
 
-            text = file_counter_config.current_label
-
-            # # Sync single class mode from PR#106
-            # if self.single_class_mode.isChecked() and self.lastLabel:
-            #     text = self.lastLabel
-            # else:
-            #     text = self.label_dialog.pop_up(text=self.prev_label_text)
-            #     self.lastLabel = text
+            # Sync single class mode from PR#106
+            if self.single_class_mode.isChecked() and self.lastLabel:
+                text = self.lastLabel
+            else:
+                text = self.label_dialog.pop_up(text=self.prev_label_text)
+                self.lastLabel = text
         else:
             text = self.default_label_text_line.text()
 
@@ -1929,7 +1932,7 @@ def get_main_app(argv=[]):
     argparser = argparse.ArgumentParser()
     argparser.add_argument("image_dir", nargs="?")
     argparser.add_argument("class_file",
-                           default=os.path.join(os.path.dirname(__file__), "data", "predefined_classes.txt"),
+                           # default=os.path.join(os.path.dirname(__file__), "data", "predefined_classes.txt"),
                            nargs="?")
     argparser.add_argument("save_dir", nargs="?")
     args = argparser.parse_args(argv[1:])
@@ -1953,7 +1956,6 @@ def main():
 
 if __name__ == '__main__':
     km.start()
-    wd.start(file_counter_config.report_dir)
     main()
     km.stop()
     wd.stop()
